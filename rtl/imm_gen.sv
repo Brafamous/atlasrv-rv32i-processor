@@ -15,6 +15,9 @@ module imm_gen (
                 imm_o = {{20{instr_i[31]}}, instr_i[31:20]};
             end
 
+            IMM_S: begin
+                imm_o = {{20{instr_i[31]}}, instr_i[31:25], instr_i[11:7]};
+            end
             default: begin
                 imm_o = '0;
             end

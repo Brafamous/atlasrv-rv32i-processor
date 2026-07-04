@@ -50,6 +50,14 @@ module imm_gen_tb;
         // I-Type negative immediate: imm[11:0] = 12'h800 = -2048
         check(32'h8000_0000, IMM_I, 32'hFFFF_F800, "I-Type minimum negative immediate");
 
+        // S-Type positive immediate: imm[11:0] = 12'h014 = +20
+        // imm[11:5] = 7'h00, imm[4:0] = 5'h14
+        check(32'h0000_0A00, IMM_S, 32'h0000_0014, "S-Type positive immediate");
+
+        // S-Type negative immediate: imm[11:0] = 12'hFFF = -1
+        // imm[11:5] = 7'h7F, imm[4:0] = 5'h1F
+        check(32'hFE00_0F80, IMM_S, 32'hFFFF_FFFF, "S-Type negative immediate -1");
+
         $display("All immediate generator tests passed.");
         $finish;
     end
