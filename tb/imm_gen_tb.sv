@@ -41,22 +41,25 @@ module imm_gen_tb;
     initial begin
         $display("Starting immediate generator directed tests...");
 
-        // I-Type positive immediate: imm[11:0] = 12'h00A = +10
-        check(32'h00A0_0000, IMM_I, 32'h0000_000A, "I-Type positive immediate");
-
-        // I-Type negative immediate: imm[11:0] = 12'hFFF = -1
+        // I-Type
+        check(32'h00A0_0000, IMM_I, 32'h0000_000A, "I-Type positive immediate +10");
         check(32'hFFF0_0000, IMM_I, 32'hFFFF_FFFF, "I-Type negative immediate -1");
+        check(32'h8000_0000, IMM_I, 32'hFFFF_F800, "I-Type minimum negative immediate -2048");
 
-        // I-Type negative immediate: imm[11:0] = 12'h800 = -2048
-        check(32'h8000_0000, IMM_I, 32'hFFFF_F800, "I-Type minimum negative immediate");
-
-        // S-Type positive immediate: imm[11:0] = 12'h014 = +20
-        // imm[11:5] = 7'h00, imm[4:0] = 5'h14
-        check(32'h0000_0A00, IMM_S, 32'h0000_0014, "S-Type positive immediate");
-
-        // S-Type negative immediate: imm[11:0] = 12'hFFF = -1
-        // imm[11:5] = 7'h7F, imm[4:0] = 5'h1F
+        // S-Type
+        check(32'h0000_0A00, IMM_S, 32'h0000_0014, "S-Type positive immediate +20");
         check(32'hFE00_0F80, IMM_S, 32'hFFFF_FFFF, "S-Type negative immediate -1");
+
+        // B-Type
+        check(32'h0000_0A00, IMM_B, 32'h0000_0014, "B-Type positive branch offset +20");
+        check(32'hFE00_0F80, IMM_B, 32'hFFFF_FFFE, "B-Type negative branch offset -2");
+
+        // U-Type
+        check(32'h1234_5000, IMM_U, 32'h1234_5000, "U-Type upper immediate");
+
+        // J-Type
+        check(32'h0000_0000, IMM_J, 32'h0000_0000, "J-Type zero immediate");
+        check(32'h8000_0000, IMM_J, 32'hFFF0_0000, "J-Type negative immediate");
 
         $display("All immediate generator tests passed.");
         $finish;
