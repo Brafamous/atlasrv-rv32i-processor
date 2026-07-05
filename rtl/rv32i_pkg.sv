@@ -111,6 +111,29 @@ typedef enum logic [2:0] {
 
     } control_t;
 
+
+        // ------------------------------------------------------------
+    // Load operation selection
+    // ------------------------------------------------------------
+
+    typedef enum logic [2:0] {
+        LOAD_LB,
+        LOAD_LH,
+        LOAD_LW,
+        LOAD_LBU,
+        LOAD_LHU
+    } load_type_e;
+
+    // ------------------------------------------------------------
+    // Store operation selection
+    // ------------------------------------------------------------
+
+    typedef enum logic [1:0] {
+        STORE_SB,
+        STORE_SH,
+        STORE_SW
+    } store_type_e;
+
 endpackage
 
 `default_nettype wire
