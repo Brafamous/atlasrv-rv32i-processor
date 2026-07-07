@@ -51,17 +51,18 @@ package rv32i_pkg;
         ALU_AND  = 4'd9,
         ALU_COPY_B = 4'd10
     } alu_op_e;
-// ------------------------------------------------------------
-// Immediate format selection
-// ------------------------------------------------------------
 
-typedef enum logic [2:0] {
-    IMM_I,
-    IMM_S,
-    IMM_B,
-    IMM_U,
-    IMM_J
-} imm_type_e;
+    // ------------------------------------------------------------
+    // Immediate format selection
+    // ------------------------------------------------------------
+
+    typedef enum logic [2:0] {
+        IMM_I,
+        IMM_S,
+        IMM_B,
+        IMM_U,
+        IMM_J
+    } imm_type_e;
 
     // ------------------------------------------------------------
     // Branch operation selection
@@ -88,31 +89,22 @@ typedef enum logic [2:0] {
     } wb_sel_e;
 
     // ------------------------------------------------------------
-    // Decoder control bundle
+    // ALU operand selection
     // ------------------------------------------------------------
 
-    typedef struct packed {
+    typedef enum logic [1:0] {
+        ALU_SRC_A_RS1,
+        ALU_SRC_A_PC,
+        ALU_SRC_A_ZERO
+    } alu_src_a_e;
 
-        alu_op_e      alu_op;
+    typedef enum logic [1:0] {
+        ALU_SRC_B_RS2,
+        ALU_SRC_B_IMM,
+        ALU_SRC_B_FOUR
+    } alu_src_b_e;
 
-        imm_type_e    imm_type;
-
-        branch_type_e branch_type;
-
-        wb_sel_e      wb_sel;
-
-        logic reg_write;
-
-        logic mem_read;
-
-        logic mem_write;
-
-        logic jump;
-
-    } control_t;
-
-
-        // ------------------------------------------------------------
+    // ------------------------------------------------------------
     // Load operation selection
     // ------------------------------------------------------------
 
@@ -133,6 +125,25 @@ typedef enum logic [2:0] {
         STORE_SH,
         STORE_SW
     } store_type_e;
+
+    // ------------------------------------------------------------
+    // Decoder control bundle
+    // ------------------------------------------------------------
+
+    typedef struct packed {
+        alu_op_e      alu_op;
+        imm_type_e    imm_type;
+        branch_type_e branch_type;
+        wb_sel_e      wb_sel;
+        alu_src_a_e   alu_src_a;
+        alu_src_b_e   alu_src_b;
+        load_type_e   load_type;
+        store_type_e  store_type;
+        logic         reg_write;
+        logic         mem_read;
+        logic         mem_write;
+        logic         jump;
+    } control_t;
 
 endpackage
 

@@ -90,7 +90,25 @@ module rv32i_single_cycle_core (
     end
 
     assign pc_plus4   = pc_q + 32'd4;
-    assign pc_next    = pc_plus4;
+    logic [XLEN-1:0] branch_target;
+    logic [XLEN-1:0] jalr_target;
+
+    assign branch_target = pc_q + immediate;
+    assign jalr_target   = (rs1_data + immediate) & ~32'h0000_0001;
+
+    always_comb begin
+        pc_next = pc_plus4;
+
+        if (ctrl.jump) begin
+            if (instruction[6:0] == OPCODE_JALR) begin
+                pc_next = jalr_target;
+            end else begin
+                pc_next = branch_target;
+            end
+        end else if (branch_taken) begin
+            pc_next = branch_target;
+        end
+    end
 
     assign imem_addr_o = pc_q;
     assign instruction = imem_rdata_i;
@@ -119,14 +137,25 @@ module rv32i_single_cycle_core (
     );
 
     //============================================================
-    // Temporary defaults for unconnected later milestones
+    // MEMORY: Data Memory Interface and Load/Store Formatting
     //============================================================
 
-    assign dmem_addr_o  = '0;
-    assign dmem_wdata_o = '0;
-    assign dmem_be_o    = '0;
-    assign dmem_we_o    = 1'b0;
-    assign dmem_re_o    = 1'b0;
+    load_store_unit u_load_store_unit (
+        .addr_offset_i (alu_result[1:0]),
+
+        .load_type_i   (ctrl.load_type),
+        .dmem_rdata_i  (dmem_rdata_i),
+        .load_data_o   (load_data),
+
+        .store_type_i  (ctrl.store_type),
+        .store_data_i  (rs2_data),
+        .store_wdata_o (dmem_wdata_o),
+        .store_be_o    (dmem_be_o)
+    );
+
+    assign dmem_addr_o = alu_result;
+    assign dmem_we_o   = ctrl.mem_write;
+    assign dmem_re_o   = ctrl.mem_read;
     
 
     //============================================================
@@ -149,15 +178,21 @@ module rv32i_single_cycle_core (
     // EXECUTE: ALU Operand Selection
     //============================================================
 
-    assign alu_operand_a = rs1_data;
+    always_comb begin
+        unique case (ctrl.alu_src_a)
+            ALU_SRC_A_RS1:  alu_operand_a = rs1_data;
+            ALU_SRC_A_PC:   alu_operand_a = pc_q;
+            ALU_SRC_A_ZERO: alu_operand_a = '0;
+            default:        alu_operand_a = rs1_data;
+        endcase
+    end
 
     always_comb begin
-        unique case (ctrl.imm_type)
-            IMM_I,
-            IMM_S,
-            IMM_U,
-            IMM_J:   alu_operand_b = immediate;
-            default: alu_operand_b = rs2_data;
+        unique case (ctrl.alu_src_b)
+            ALU_SRC_B_RS2:  alu_operand_b = rs2_data;
+            ALU_SRC_B_IMM:  alu_operand_b = immediate;
+            ALU_SRC_B_FOUR: alu_operand_b = 32'd4;
+            default:        alu_operand_b = rs2_data;
         endcase
     end
 
@@ -183,6 +218,7 @@ module rv32i_single_cycle_core (
         .branch_taken_o (branch_taken)
     );
 
+
     //============================================================
     // WRITEBACK: Writeback MUX
     //============================================================
@@ -195,7 +231,7 @@ module rv32i_single_cycle_core (
             default: writeback_data = '0;
         endcase
     end
-    assign load_data = dmem_rdata_i;
+
 
 endmodule
 

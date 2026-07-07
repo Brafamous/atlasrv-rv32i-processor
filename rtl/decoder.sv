@@ -18,17 +18,22 @@ module decoder (
 
     always_comb begin
         ctrl_o = '0;
-
         ctrl_o.alu_op      = ALU_ADD;
         ctrl_o.imm_type    = IMM_I;
         ctrl_o.branch_type = BR_NONE;
         ctrl_o.wb_sel      = WB_ALU;
+        ctrl_o.alu_src_a   = ALU_SRC_A_RS1;
+        ctrl_o.alu_src_b   = ALU_SRC_B_RS2;
+        ctrl_o.load_type   = LOAD_LW;
+        ctrl_o.store_type  = STORE_SW;
 
         unique case (opcode)
 
             OPCODE_R_TYPE: begin
                 ctrl_o.reg_write = 1'b1;
                 ctrl_o.wb_sel    = WB_ALU;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_RS2;
 
                 unique case (funct3)
                     3'b000: ctrl_o.alu_op = (funct7 == 7'b0100000) ? ALU_SUB : ALU_ADD;
@@ -47,6 +52,8 @@ module decoder (
                 ctrl_o.reg_write = 1'b1;
                 ctrl_o.imm_type  = IMM_I;
                 ctrl_o.wb_sel    = WB_ALU;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
 
                 unique case (funct3)
                     3'b000: ctrl_o.alu_op = ALU_ADD;   // ADDI
@@ -67,17 +74,40 @@ module decoder (
                 ctrl_o.imm_type  = IMM_I;
                 ctrl_o.alu_op    = ALU_ADD;
                 ctrl_o.wb_sel    = WB_MEM;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
+
+                unique case (funct3)
+                    3'b000: ctrl_o.load_type = LOAD_LB;
+                    3'b001: ctrl_o.load_type = LOAD_LH;
+                    3'b010: ctrl_o.load_type = LOAD_LW;
+                    3'b100: ctrl_o.load_type = LOAD_LBU;
+                    3'b101: ctrl_o.load_type = LOAD_LHU;
+                    default: ctrl_o.load_type = LOAD_LW;
+                endcase
             end
 
             OPCODE_STORE: begin
                 ctrl_o.mem_write = 1'b1;
                 ctrl_o.imm_type  = IMM_S;
                 ctrl_o.alu_op    = ALU_ADD;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
+
+                unique case (funct3)
+                    3'b000: ctrl_o.store_type = STORE_SB;
+                    3'b001: ctrl_o.store_type = STORE_SH;
+                    3'b010: ctrl_o.store_type = STORE_SW;
+                    default: ctrl_o.store_type = STORE_SW;
+                endcase
+
             end
 
             OPCODE_BRANCH: begin
-                ctrl_o.imm_type = IMM_B;
-                ctrl_o.alu_op   = ALU_SUB;
+                ctrl_o.imm_type  = IMM_B;
+                ctrl_o.alu_op    = ALU_SUB;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_RS2;
 
                 unique case (funct3)
                     3'b000: ctrl_o.branch_type = BR_BEQ;
@@ -95,6 +125,8 @@ module decoder (
                 ctrl_o.jump      = 1'b1;
                 ctrl_o.imm_type  = IMM_J;
                 ctrl_o.wb_sel    = WB_PC4;
+                ctrl_o.alu_src_a = ALU_SRC_A_PC;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
             end
 
             OPCODE_JALR: begin
@@ -103,6 +135,8 @@ module decoder (
                 ctrl_o.imm_type  = IMM_I;
                 ctrl_o.alu_op    = ALU_ADD;
                 ctrl_o.wb_sel    = WB_PC4;
+                ctrl_o.alu_src_a = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
             end
 
             OPCODE_LUI: begin
@@ -110,6 +144,8 @@ module decoder (
                 ctrl_o.imm_type  = IMM_U;
                 ctrl_o.alu_op    = ALU_COPY_B;
                 ctrl_o.wb_sel    = WB_ALU;
+                ctrl_o.alu_src_a = ALU_SRC_A_ZERO;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
             end
 
             OPCODE_AUIPC: begin
@@ -117,6 +153,8 @@ module decoder (
                 ctrl_o.imm_type  = IMM_U;
                 ctrl_o.alu_op    = ALU_ADD;
                 ctrl_o.wb_sel    = WB_ALU;
+                ctrl_o.alu_src_a = ALU_SRC_A_PC;
+                ctrl_o.alu_src_b = ALU_SRC_B_IMM;
             end
 
             default: begin
@@ -125,6 +163,10 @@ module decoder (
                 ctrl_o.imm_type    = IMM_I;
                 ctrl_o.branch_type = BR_NONE;
                 ctrl_o.wb_sel      = WB_ALU;
+                ctrl_o.alu_src_a   = ALU_SRC_A_RS1;
+                ctrl_o.alu_src_b   = ALU_SRC_B_RS2;
+                ctrl_o.load_type   = LOAD_LW;
+                ctrl_o.store_type  = STORE_SW;
             end
 
         endcase
@@ -133,4 +175,3 @@ module decoder (
 endmodule
 
 `default_nettype wire
-
