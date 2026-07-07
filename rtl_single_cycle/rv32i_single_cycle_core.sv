@@ -77,6 +77,57 @@ module rv32i_single_cycle_core (
 
     logic [XLEN-1:0] writeback_data;
 
+    //============================================================
+    // FETCH: Program Counter and Instruction Interface
+    //============================================================
+
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            pc_q <= RESET_VECTOR;
+        end else begin
+            pc_q <= pc_next;
+        end
+    end
+
+    assign pc_plus4   = pc_q + 32'd4;
+    assign pc_next    = pc_plus4;
+
+    assign imem_addr_o = pc_q;
+    assign instruction = imem_rdata_i;
+
+    //============================================================
+    // DECODE: Instruction Field Extraction
+    //============================================================
+
+    assign rs1_addr = instruction[19:15];
+    assign rs2_addr = instruction[24:20];
+    assign rd_addr  = instruction[11:7];
+
+    //============================================================
+    // DECODE: Control and Immediate Generation
+    //============================================================
+
+    decoder u_decoder (
+        .instr_i (instruction),
+        .ctrl_o  (ctrl)
+    );
+
+    imm_gen u_imm_gen (
+        .instr_i    (instruction),
+        .imm_type_i (ctrl.imm_type),
+        .imm_o      (immediate)
+    );
+
+    //============================================================
+    // Temporary defaults for unconnected later milestones
+    //============================================================
+
+    assign dmem_addr_o  = '0;
+    assign dmem_wdata_o = '0;
+    assign dmem_be_o    = '0;
+    assign dmem_we_o    = 1'b0;
+    assign dmem_re_o    = 1'b0;
+
 endmodule
 
 `default_nettype wire
