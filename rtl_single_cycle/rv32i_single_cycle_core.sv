@@ -127,6 +127,75 @@ module rv32i_single_cycle_core (
     assign dmem_be_o    = '0;
     assign dmem_we_o    = 1'b0;
     assign dmem_re_o    = 1'b0;
+    
+
+    //============================================================
+    // DECODE/WRITEBACK: Register File
+    //============================================================
+
+    regfile u_regfile (
+        .clk        (clk),
+        .rst_n      (rst_n),
+        .rs1_addr_i (rs1_addr),
+        .rs2_addr_i (rs2_addr),
+        .rs1_data_o (rs1_data),
+        .rs2_data_o (rs2_data),
+        .rd_we_i    (ctrl.reg_write),
+        .rd_addr_i  (rd_addr),
+        .rd_data_i  (writeback_data)
+    );
+
+    //============================================================
+    // EXECUTE: ALU Operand Selection
+    //============================================================
+
+    assign alu_operand_a = rs1_data;
+
+    always_comb begin
+        unique case (ctrl.imm_type)
+            IMM_I,
+            IMM_S,
+            IMM_U,
+            IMM_J:   alu_operand_b = immediate;
+            default: alu_operand_b = rs2_data;
+        endcase
+    end
+
+    //============================================================
+    // EXECUTE: ALU
+    //============================================================
+
+    alu u_alu (
+        .a_i       (alu_operand_a),
+        .b_i       (alu_operand_b),
+        .alu_op_i  (ctrl.alu_op),
+        .result_o  (alu_result)
+    );
+
+    //============================================================
+    // EXECUTE: Branch Unit
+    //============================================================
+
+    branch_unit u_branch_unit (
+        .a_i            (rs1_data),
+        .b_i            (rs2_data),
+        .branch_type_i  (ctrl.branch_type),
+        .branch_taken_o (branch_taken)
+    );
+
+    //============================================================
+    // WRITEBACK: Writeback MUX
+    //============================================================
+
+    always_comb begin
+        unique case (ctrl.wb_sel)
+            WB_ALU:  writeback_data = alu_result;
+            WB_MEM:  writeback_data = load_data;
+            WB_PC4:  writeback_data = pc_plus4;
+            default: writeback_data = '0;
+        endcase
+    end
+    assign load_data = dmem_rdata_i;
 
 endmodule
 
