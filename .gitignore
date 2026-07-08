@@ -1,2 +1,17 @@
+# Icarus Verilog / simulation outputs
 waveforms/*.vvp
-waveforms/*.vvp
+waveforms/*.vcd
+*.vvp
+*.vcd
+
+# Common generated EDA artifacts
+reports/
+gds/
+gls/
+synth/
+sta/
+openlane/runs/
+
+# Editor / OS files
+.DS_Store
+Thumbs.db
