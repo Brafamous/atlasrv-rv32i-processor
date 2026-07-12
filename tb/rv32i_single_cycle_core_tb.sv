@@ -1,6 +1,18 @@
 `timescale 1ns/1ps
 `default_nettype none
 
+//==================================================================
+// rv32i_single_cycle_core_tb
+//
+// System-level bring-up: the core wired to the two independently
+// verified memory models. From here on we never drive imem/dmem
+// ports directly -- the CPU controls them. We load a program via
+// write_word() on the instruction memory instance (a testbench-only
+// task; the CPU has no write path to instruction memory), then let
+// the clock run and check architectural state: registers, PC, and
+// data memory contents.
+//==================================================================
+
 import rv32i_pkg::*;
 
 module rv32i_single_cycle_core_tb;
@@ -102,6 +114,27 @@ module rv32i_single_cycle_core_tb;
     endfunction
     function automatic logic [31:0] i_jal (input logic [4:0] rd, input logic [20:0] imm);
         i_jal = enc_j(imm, rd, OPCODE_JAL);
+    endfunction
+    function automatic logic [31:0] i_jalr (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_jalr = enc_i(imm, rs1, 3'b000, rd, OPCODE_JALR);
+    endfunction
+    function automatic logic [31:0] i_sb (input logic [4:0] rs1, rs2, input logic [11:0] imm);
+        i_sb = enc_s(imm, rs2, rs1, 3'b000, OPCODE_STORE);
+    endfunction
+    function automatic logic [31:0] i_sh (input logic [4:0] rs1, rs2, input logic [11:0] imm);
+        i_sh = enc_s(imm, rs2, rs1, 3'b001, OPCODE_STORE);
+    endfunction
+    function automatic logic [31:0] i_lb (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lb = enc_i(imm, rs1, 3'b000, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lbu (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lbu = enc_i(imm, rs1, 3'b100, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lh (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lh = enc_i(imm, rs1, 3'b001, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lhu (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lhu = enc_i(imm, rs1, 3'b101, rd, OPCODE_LOAD);
     endfunction
     function automatic logic [31:0] nop();
         nop = i_addi(5'd0, 5'd0, 12'd0);
@@ -205,6 +238,22 @@ module rv32i_single_cycle_core_tb;
 
         run_cycles(4);
         check_reg(3, 32'd42, "lw reflects sw (x3 = 42)");
+
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd200));
+        imem.write_word(1, i_addi(5'd4, 5'd0, -12'sd1));
+        imem.write_word(2, i_sb  (5'd1, 5'd4, 12'd4));
+        imem.write_word(3, i_lb  (5'd5, 5'd1, 12'd4));
+        imem.write_word(4, i_lbu (5'd6, 5'd1, 12'd4));
+        imem.write_word(5, i_sh  (5'd1, 5'd4, 12'd8));
+        imem.write_word(6, i_lh  (5'd7, 5'd1, 12'd8));
+        imem.write_word(7, i_lhu (5'd8, 5'd1, 12'd8));
+
+        run_cycles(8);
+        check_reg(5, 32'hFFFF_FFFF, "lb sign-extends stored 0xFF -> -1");
+        check_reg(6, 32'h0000_00FF, "lbu zero-extends stored 0xFF -> 0x000000FF");
+        check_reg(7, 32'hFFFF_FFFF, "lh sign-extends stored 0xFFFF -> -1");
+        check_reg(8, 32'h0000_FFFF, "lhu zero-extends stored 0xFFFF -> 0x0000FFFF");
     endtask
 
     task automatic phase6_branch();
@@ -234,6 +283,24 @@ module rv32i_single_cycle_core_tb;
         check_reg(3, 32'd5, "x3 = 5 -- landed correctly after JAL");
     endtask
 
+    task automatic phase8_jalr();
+        $display("\n--- Phase 8: JALR ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd4, 5'd0, 12'd20));
+        imem.write_word(1, i_jalr(5'd5, 5'd4, 12'd5));
+        imem.write_word(2, i_addi(5'd6, 5'd0, 12'd99));
+        imem.write_word(3, i_addi(5'd7, 5'd0, 12'd99));
+        imem.write_word(4, i_addi(5'd7, 5'd0, 12'd99));
+        imem.write_word(5, i_addi(5'd7, 5'd0, 12'd99));
+        imem.write_word(6, i_addi(5'd8, 5'd0, 12'd11));
+
+        run_cycles(3);
+        check_reg(4, 32'd20, "x4 = 20 (jalr base)");
+        check_reg(5, 32'd8,  "jalr link = pc+4 = 8");
+        check_reg(6, 32'd0,  "x6 untouched -- JALR skipped pc=8");
+        check_reg(8, 32'd11, "x8 = 11 -- landed correctly after JALR target=24");
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
@@ -244,6 +311,7 @@ module rv32i_single_cycle_core_tb;
         phase5_load_store();
         phase6_branch();
         phase7_jal();
+        phase8_jalr();
 
         $display("\n===================================");
         $display("CPU bring-up complete: %0d PASS, %0d FAIL", pass_count, fail_count);
