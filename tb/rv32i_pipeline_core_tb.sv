@@ -70,6 +70,14 @@ module rv32i_pipeline_core_tb;
         i_add = {7'b0000000, rs2, rs1, 3'b000, rd, OPCODE_R_TYPE};
     endfunction
 
+    function automatic logic [31:0] i_lw (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lw = enc_i(imm, rs1, 3'b010, rd, OPCODE_LOAD);
+    endfunction
+
+    function automatic logic [31:0] i_sw (input logic [4:0] rs1, rs2, input logic [11:0] imm);
+        i_sw = {imm[11:5], rs2, rs1, 3'b010, imm[4:0], OPCODE_STORE};
+    endfunction
+
     function automatic logic [31:0] nop();
         nop = i_addi(5'd0, 5'd0, 12'd0);
     endfunction
@@ -149,6 +157,46 @@ module rv32i_pipeline_core_tb;
         check_reg(2, 32'd8, "x2 = x1+3 = 8 (MEM/WB forward path)");
     endtask
 
+    task automatic phase4_load_use_stall();
+        $display("\n--- Phase 4: Load-Use Hazard (stall required) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd100)); // x1 = base addr 100
+        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd42));  // x2 = 42
+        imem.write_word(2, i_sw  (5'd1, 5'd2, 12'd0));   // mem[100] = 42
+        imem.write_word(3, i_lw  (5'd3, 5'd1, 12'd0));   // x3 = mem[100] (load)
+        imem.write_word(4, i_addi(5'd4, 5'd3, 12'd1));   // x4 = x3+1 -- LOAD-USE HAZARD
+
+        run_cycles(11);
+        check_reg(3, 32'd42, "x3 = mem[100] = 42 (load completed)");
+        check_reg(4, 32'd43, "x4 = x3+1 = 43 (load-use hazard resolved via stall)");
+    endtask
+
+    task automatic phase4_no_hazard_no_stall();
+        $display("\n--- Phase 4: No Hazard -- confirm no unnecessary stall ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd100));
+        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd42));
+        imem.write_word(2, i_sw  (5'd1, 5'd2, 12'd0));
+        imem.write_word(3, i_lw  (5'd3, 5'd1, 12'd0));
+        imem.write_word(4, i_addi(5'd5, 5'd0, 12'd7)); // independent -- no hazard
+
+        run_cycles(9);
+        check_reg(3, 32'd42, "x3 = mem[100] = 42");
+        check_reg(5, 32'd7,  "x5 = 7 (unrelated instruction, no stall needed)");
+    endtask
+
+    task automatic phase4_wb_id_gap_of_three();
+        $display("\n--- Phase 4: WB->ID Gap-of-3 Dependency (regfile bypass) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd100)); // x1 = 100
+        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd42));  // x2 = 42
+        imem.write_word(2, i_sw  (5'd1, 5'd2, 12'd0));   // mem[100] = 42
+        imem.write_word(3, i_lw  (5'd3, 5'd1, 12'd0));   // x3 = mem[100] = 42 -- reads x1, gap of 3 from I0
+
+        run_cycles(9);
+        check_reg(3, 32'd42, "x3 = mem[100] = 42 (gap-of-3 read of x1 resolved by bypass)");
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
@@ -156,9 +204,12 @@ module rv32i_pipeline_core_tb;
         phase3_chained_dependency();
         phase3_dual_source_dependency();
         phase3_mem_wb_forward();
+        phase4_load_use_stall();
+        phase4_no_hazard_no_stall();
+        phase4_wb_id_gap_of_three();
 
         $display("\n===================================");
-        $display("Pipeline Phase 3 forwarding: %0d PASS, %0d FAIL", pass_count, fail_count);
+        $display("Pipeline Phase 4: %0d PASS, %0d FAIL", pass_count, fail_count);
         $display("===================================");
         $finish;
     end
@@ -166,4 +217,3 @@ module rv32i_pipeline_core_tb;
 endmodule
 
 `default_nettype wire
-

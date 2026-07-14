@@ -18,10 +18,7 @@ module rv32i_pipeline_core (
     input  logic [XLEN-1:0]    dmem_rdata_i
 );
 
-    logic stall;
-    logic flush;
-    assign stall = 1'b0;
-    assign flush = 1'b0;
+    logic hazard_stall;
 
     logic [XLEN-1:0] pc, pc_plus4;
     logic [XLEN-1:0] pc_next;
@@ -31,7 +28,7 @@ module rv32i_pipeline_core (
         .clk      (clk),
         .rst_n    (rst_n),
         .pc_next  (pc_next),
-        .pc_en    (1'b1),
+        .pc_en    (~hazard_stall),
         .pc       (pc),
         .pc_plus4 (pc_plus4)
     );
@@ -55,8 +52,8 @@ module rv32i_pipeline_core (
     if_id_reg u_if_id_reg (
         .clk           (clk),
         .rst_n         (rst_n),
-        .stall         (stall),
-        .flush         (flush),
+        .stall         (hazard_stall),
+        .flush         (1'b0),
         .pc_i          (if_pc),
         .pc_plus4_i    (if_pc_plus4),
         .instruction_i (if_instruction),
@@ -104,8 +101,8 @@ module rv32i_pipeline_core (
     id_ex_reg u_id_ex_reg (
         .clk         (clk),
         .rst_n       (rst_n),
-        .stall       (stall),
-        .flush       (flush),
+        .stall       (1'b0),
+        .flush       (hazard_stall),
         .pc_i        (id_pc),
         .pc_plus4_i  (id_pc_plus4),
         .rs1_data_i  (id_rs1_data),
@@ -124,6 +121,14 @@ module rv32i_pipeline_core (
         .rd_addr_o   (exreg_rd_addr),
         .immediate_o (exreg_immediate),
         .ctrl_o      (exreg_ctrl)
+    );
+
+    hazard_detection_unit u_hazard_detection_unit (
+        .id_rs1_addr_i   (id_rs1_addr),
+        .id_rs2_addr_i   (id_rs2_addr),
+        .idex_rd_addr_i  (exreg_rd_addr),
+        .idex_mem_read_i (exreg_ctrl.mem_read),
+        .stall_o         (hazard_stall)
     );
 
     logic [XLEN-1:0] ex_pc_plus4;
@@ -185,8 +190,8 @@ module rv32i_pipeline_core (
     ex_mem_reg u_ex_mem_reg (
         .clk              (clk),
         .rst_n            (rst_n),
-        .stall            (stall),
-        .flush            (flush),
+        .stall            (1'b0),
+        .flush            (1'b0),
         .pc_plus4_i       (ex_pc_plus4),
         .alu_result_i     (ex_alu_result),
         .branch_target_i  (ex_branch_target),
@@ -237,8 +242,8 @@ module rv32i_pipeline_core (
     mem_wb_reg u_mem_wb_reg (
         .clk           (clk),
         .rst_n         (rst_n),
-        .stall         (stall),
-        .flush         (flush),
+        .stall         (1'b0),
+        .flush         (1'b0),
         .pc_plus4_i    (mem_pc_plus4),
         .alu_result_i  (mem_alu_result),
         .load_data_i   (mem_load_data),
@@ -265,4 +270,3 @@ module rv32i_pipeline_core (
 endmodule
 
 `default_nettype wire
-

@@ -33,9 +33,28 @@ module regfile (
         end
     end
 
+    // Same-cycle WB->ID bypass: if this cycle's write target matches
+    // a read address, the read must return the incoming write value,
+    // not the pre-write array contents. Without this, a producer
+    // exactly 3 instructions ahead of a consumer (WB coincides with
+    // ID) reads a stale value, since the array update from WB's
+    // nonblocking assignment isn't visible until the following cycle.
     always_comb begin
-        rs1_data_o = (rs1_addr_i == '0) ? '0 : regs[rs1_addr_i];
-        rs2_data_o = (rs2_addr_i == '0) ? '0 : regs[rs2_addr_i];
+        if (rs1_addr_i == '0) begin
+            rs1_data_o = '0;
+        end else if (rd_we_i && (rd_addr_i != '0) && (rd_addr_i == rs1_addr_i)) begin
+            rs1_data_o = rd_data_i;
+        end else begin
+            rs1_data_o = regs[rs1_addr_i];
+        end
+
+        if (rs2_addr_i == '0) begin
+            rs2_data_o = '0;
+        end else if (rd_we_i && (rd_addr_i != '0) && (rd_addr_i == rs2_addr_i)) begin
+            rs2_data_o = rd_data_i;
+        end else begin
+            rs2_data_o = regs[rs2_addr_i];
+        end
     end
 
 endmodule
