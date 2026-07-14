@@ -66,6 +66,10 @@ module rv32i_pipeline_core_tb;
         i_addi = enc_i(imm, rs1, 3'b000, rd, OPCODE_I_TYPE);
     endfunction
 
+    function automatic logic [31:0] i_add (input logic [4:0] rd, rs1, rs2);
+        i_add = {7'b0000000, rs2, rs1, 3'b000, rd, OPCODE_R_TYPE};
+    endfunction
+
     function automatic logic [31:0] nop();
         nop = i_addi(5'd0, 5'd0, 12'd0);
     endfunction
@@ -99,84 +103,62 @@ module rv32i_pipeline_core_tb;
         end
     endtask
 
-    task automatic phase1a_progression();
-        $display("\n--- Phase 1a: Instruction Progression ---");
-        apply_reset();
-        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd11));
-        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd22));
-        imem.write_word(2, i_addi(5'd3, 5'd0, 12'd33));
-        imem.write_word(3, i_addi(5'd4, 5'd0, 12'd44));
-        imem.write_word(4, i_addi(5'd5, 5'd0, 12'd55));
-
-        #1;
-        if (imem_addr !== RESET_VECTOR) begin
-            $display("FAIL: IF not fetching from RESET_VECTOR after reset");
-            fail_count = fail_count + 1;
-        end else begin
-            $display("PASS: IF fetching from RESET_VECTOR after reset");
-            pass_count = pass_count + 1;
-        end
-
-        run_cycles(5);
-        check_reg(1, 32'd11, "I1 (addi x1,x0,11) reaches WB after 5 cycles");
-
-        run_cycles(1);
-        check_reg(2, 32'd22, "I2 reaches WB one cycle later");
-
-        run_cycles(1);
-        check_reg(3, 32'd33, "I3 reaches WB one cycle later");
-
-        run_cycles(1);
-        check_reg(4, 32'd44, "I4 reaches WB one cycle later");
-
-        run_cycles(1);
-        check_reg(5, 32'd55, "I5 reaches WB one cycle later");
-    endtask
-
-    task automatic phase1b_independent_block();
-        $display("\n--- Phase 1b: Independent Instructions (drained) ---");
-        apply_reset();
-        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd5));
-        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd7));
-        imem.write_word(2, i_addi(5'd3, 5'd0, 12'd9));
-
-        run_cycles(8);
-        check_reg(1, 32'd5, "x1 = 5 (fully drained)");
-        check_reg(2, 32'd7, "x2 = 7 (fully drained)");
-        check_reg(3, 32'd9, "x3 = 9 (fully drained)");
-    endtask
-
-    task automatic phase2_raw_hazard_exposure();
-        logic [XLEN-1:0] x2_actual;
-        $display("\n--- Phase 2: RAW Hazard Exposure (expected to be WRONG) ---");
+    task automatic phase2_raw_hazard_now_fixed();
+        $display("\n--- Phase 3: RAW Hazard (must now PASS with forwarding) ---");
         apply_reset();
         imem.write_word(0, i_addi(5'd1, 5'd0, 12'd5));
         imem.write_word(1, i_addi(5'd2, 5'd1, 12'd3));
 
         run_cycles(6);
-        x2_actual = dut.u_id_stage.u_regfile.regs[2];
+        check_reg(1, 32'd5, "x1 = 5");
+        check_reg(2, 32'd8, "x2 = x1+3 = 8 (EX/MEM forward)");
+    endtask
 
-        $display("x1 (should be 5)            = 0x%08h", dut.u_id_stage.u_regfile.regs[1]);
-        $display("x2 (correct answer is 8)    = 0x%08h", x2_actual);
+    task automatic phase3_chained_dependency();
+        $display("\n--- Phase 3: Chained Dependency ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd5));
+        imem.write_word(1, i_addi(5'd2, 5'd1, 12'd3));
+        imem.write_word(2, i_addi(5'd3, 5'd2, 12'd4));
 
-        if (x2_actual == 32'd8) begin
-            $display("UNEXPECTED: x2 is correct without forwarding -- investigate why.");
-        end else begin
-            $display("CONFIRMED: x2 = %0d, not 8 -- RAW hazard reproduced as expected.", x2_actual);
-            $display("Root cause: addi x2,x1,3 read x1 from the regfile in ID while");
-            $display("addi x1,x0,5 was still in EX -- 3 stages away from writing x1 back.");
-        end
+        run_cycles(7);
+        check_reg(1, 32'd5,  "x1 = 5");
+        check_reg(2, 32'd8,  "x2 = x1+3 = 8 (back-to-back forward)");
+        check_reg(3, 32'd12, "x3 = x2+4 = 12 (back-to-back forward)");
+    endtask
+
+    task automatic phase3_dual_source_dependency();
+        $display("\n--- Phase 3: Dual-Source Dependency (rs1 and rs2) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd10));
+        imem.write_word(1, i_addi(5'd2, 5'd0, 12'd20));
+        imem.write_word(2, i_add (5'd3, 5'd1, 5'd2));
+
+        run_cycles(7);
+        check_reg(3, 32'd30, "x3 = x1+x2 = 30 (dual forward, rs1 and rs2)");
+    endtask
+
+    task automatic phase3_mem_wb_forward();
+        $display("\n--- Phase 3: MEM/WB Forwarding (gap of one instruction) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd5));
+        imem.write_word(1, i_addi(5'd4, 5'd0, 12'd99));
+        imem.write_word(2, i_addi(5'd2, 5'd1, 12'd3));
+
+        run_cycles(7);
+        check_reg(2, 32'd8, "x2 = x1+3 = 8 (MEM/WB forward path)");
     endtask
 
     initial begin
         rst_n = 1'b0;
 
-        phase1a_progression();
-        phase1b_independent_block();
-        phase2_raw_hazard_exposure();
+        phase2_raw_hazard_now_fixed();
+        phase3_chained_dependency();
+        phase3_dual_source_dependency();
+        phase3_mem_wb_forward();
 
         $display("\n===================================");
-        $display("Pipeline Phase 1 bring-up: %0d PASS, %0d FAIL", pass_count, fail_count);
+        $display("Pipeline Phase 3 forwarding: %0d PASS, %0d FAIL", pass_count, fail_count);
         $display("===================================");
         $finish;
     end
@@ -184,3 +166,4 @@ module rv32i_pipeline_core_tb;
 endmodule
 
 `default_nettype wire
+

@@ -18,20 +18,14 @@ module rv32i_pipeline_core (
     input  logic [XLEN-1:0]    dmem_rdata_i
 );
 
-    // ----------------------------------------------------------
-    // Phase 1 locked constants: no hazards, no forwarding
-    // ----------------------------------------------------------
     logic stall;
     logic flush;
     assign stall = 1'b0;
     assign flush = 1'b0;
 
-    // ----------------------------------------------------------
-    // PC
-    // ----------------------------------------------------------
     logic [XLEN-1:0] pc, pc_plus4;
     logic [XLEN-1:0] pc_next;
-    assign pc_next = pc_plus4; // Phase 1: always sequential
+    assign pc_next = pc_plus4;
 
     pc_reg u_pc_reg (
         .clk      (clk),
@@ -42,9 +36,6 @@ module rv32i_pipeline_core (
         .pc_plus4 (pc_plus4)
     );
 
-    // ----------------------------------------------------------
-    // IF
-    // ----------------------------------------------------------
     logic [XLEN-1:0]    if_pc, if_pc_plus4;
     logic [INSTR_W-1:0] if_instruction;
 
@@ -58,9 +49,6 @@ module rv32i_pipeline_core (
         .instruction_o (if_instruction)
     );
 
-    // ----------------------------------------------------------
-    // IF/ID
-    // ----------------------------------------------------------
     logic [XLEN-1:0]    idreg_pc, idreg_pc_plus4;
     logic [INSTR_W-1:0] idreg_instruction;
 
@@ -77,16 +65,12 @@ module rv32i_pipeline_core (
         .instruction_o (idreg_instruction)
     );
 
-    // ----------------------------------------------------------
-    // ID
-    // ----------------------------------------------------------
     logic [XLEN-1:0] id_pc, id_pc_plus4;
     logic [XLEN-1:0] id_rs1_data, id_rs2_data;
     logic [4:0]      id_rs1_addr, id_rs2_addr, id_rd_addr;
     logic [XLEN-1:0] id_immediate;
     control_t        id_ctrl;
 
-    // Backward connection: WB -> ID regfile write port
     logic [4:0]      wb_rd_addr;
     logic [XLEN-1:0] wb_wdata;
     logic            wb_reg_write;
@@ -111,9 +95,6 @@ module rv32i_pipeline_core (
         .ctrl_o         (id_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // ID/EX
-    // ----------------------------------------------------------
     logic [XLEN-1:0] exreg_pc, exreg_pc_plus4;
     logic [XLEN-1:0] exreg_rs1_data, exreg_rs2_data;
     logic [4:0]      exreg_rs1_addr, exreg_rs2_addr, exreg_rd_addr;
@@ -145,9 +126,6 @@ module rv32i_pipeline_core (
         .ctrl_o      (exreg_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // EX
-    // ----------------------------------------------------------
     logic [XLEN-1:0] ex_pc_plus4;
     logic [XLEN-1:0] ex_alu_result;
     logic [XLEN-1:0] ex_branch_target;
@@ -155,6 +133,25 @@ module rv32i_pipeline_core (
     logic [XLEN-1:0] ex_rs2_data;
     logic [4:0]      ex_rd_addr;
     control_t        ex_ctrl;
+
+    logic [1:0]      fwd_a_sel, fwd_b_sel;
+    logic [XLEN-1:0] fwd_ex_mem_data;
+    logic [XLEN-1:0] fwd_mem_wb_data;
+
+    forwarding_unit u_forwarding_unit (
+        .ex_rs1_addr_i      (exreg_rs1_addr),
+        .ex_rs2_addr_i      (exreg_rs2_addr),
+        .exmem_rd_addr_i    (memreg_rd_addr),
+        .exmem_reg_write_i  (memreg_ctrl.reg_write),
+        .exmem_is_load_i    (memreg_ctrl.wb_sel == WB_MEM),
+        .memwb_rd_addr_i    (wbreg_rd_addr),
+        .memwb_reg_write_i  (wbreg_ctrl.reg_write),
+        .fwd_a_sel_o        (fwd_a_sel),
+        .fwd_b_sel_o        (fwd_b_sel)
+    );
+
+    assign fwd_ex_mem_data = (memreg_ctrl.wb_sel == WB_PC4) ? memreg_pc_plus4 : memreg_alu_result;
+    assign fwd_mem_wb_data = wb_wdata;
 
     ex_stage u_ex_stage (
         .pc_i             (exreg_pc),
@@ -164,6 +161,10 @@ module rv32i_pipeline_core (
         .rd_addr_i        (exreg_rd_addr),
         .immediate_i      (exreg_immediate),
         .ctrl_i           (exreg_ctrl),
+        .fwd_a_sel_i      (fwd_a_sel),
+        .fwd_b_sel_i      (fwd_b_sel),
+        .fwd_ex_mem_data_i(fwd_ex_mem_data),
+        .fwd_mem_wb_data_i(fwd_mem_wb_data),
         .pc_plus4_o       (ex_pc_plus4),
         .alu_result_o     (ex_alu_result),
         .branch_target_o  (ex_branch_target),
@@ -173,9 +174,6 @@ module rv32i_pipeline_core (
         .ctrl_o           (ex_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // EX/MEM
-    // ----------------------------------------------------------
     logic [XLEN-1:0] memreg_pc_plus4;
     logic [XLEN-1:0] memreg_alu_result;
     logic [XLEN-1:0] memreg_branch_target;
@@ -205,9 +203,6 @@ module rv32i_pipeline_core (
         .ctrl_o           (memreg_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // MEM
-    // ----------------------------------------------------------
     logic [XLEN-1:0] mem_pc_plus4;
     logic [XLEN-1:0] mem_alu_result;
     logic [XLEN-1:0] mem_load_data;
@@ -233,9 +228,6 @@ module rv32i_pipeline_core (
         .ctrl_o        (mem_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // MEM/WB
-    // ----------------------------------------------------------
     logic [XLEN-1:0] wbreg_pc_plus4;
     logic [XLEN-1:0] wbreg_alu_result;
     logic [XLEN-1:0] wbreg_load_data;
@@ -259,9 +251,6 @@ module rv32i_pipeline_core (
         .ctrl_o        (wbreg_ctrl)
     );
 
-    // ----------------------------------------------------------
-    // WB
-    // ----------------------------------------------------------
     wb_stage u_wb_stage (
         .alu_result_i (wbreg_alu_result),
         .load_data_i  (wbreg_load_data),
@@ -276,3 +265,4 @@ module rv32i_pipeline_core (
 endmodule
 
 `default_nettype wire
+
