@@ -146,11 +146,34 @@ module rv32i_pipeline_core_tb;
         check_reg(3, 32'd9, "x3 = 9 (fully drained)");
     endtask
 
+    task automatic phase2_raw_hazard_exposure();
+        logic [XLEN-1:0] x2_actual;
+        $display("\n--- Phase 2: RAW Hazard Exposure (expected to be WRONG) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd5));
+        imem.write_word(1, i_addi(5'd2, 5'd1, 12'd3));
+
+        run_cycles(6);
+        x2_actual = dut.u_id_stage.u_regfile.regs[2];
+
+        $display("x1 (should be 5)            = 0x%08h", dut.u_id_stage.u_regfile.regs[1]);
+        $display("x2 (correct answer is 8)    = 0x%08h", x2_actual);
+
+        if (x2_actual == 32'd8) begin
+            $display("UNEXPECTED: x2 is correct without forwarding -- investigate why.");
+        end else begin
+            $display("CONFIRMED: x2 = %0d, not 8 -- RAW hazard reproduced as expected.", x2_actual);
+            $display("Root cause: addi x2,x1,3 read x1 from the regfile in ID while");
+            $display("addi x1,x0,5 was still in EX -- 3 stages away from writing x1 back.");
+        end
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
         phase1a_progression();
         phase1b_independent_block();
+        phase2_raw_hazard_exposure();
 
         $display("\n===================================");
         $display("Pipeline Phase 1 bring-up: %0d PASS, %0d FAIL", pass_count, fail_count);
