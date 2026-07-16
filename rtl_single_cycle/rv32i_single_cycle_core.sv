@@ -162,7 +162,7 @@ module rv32i_single_cycle_core (
     // DECODE/WRITEBACK: Register File
     //============================================================
 
-    regfile u_regfile (
+    regfile_v1 u_regfile (
         .clk        (clk),
         .rst_n      (rst_n),
         .rs1_addr_i (rs1_addr),
