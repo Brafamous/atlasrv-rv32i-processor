@@ -105,6 +105,71 @@ module rv32i_pipeline_core_tb;
         i_jalr = enc_i(imm, rs1, 3'b000, rd, OPCODE_JALR);
     endfunction
 
+    function automatic logic [31:0] enc_r
+        (input logic [6:0] funct7, input logic [4:0] rs2, rs1,
+         input logic [2:0] funct3, input logic [4:0] rd, input logic [6:0] opcode);
+        enc_r = {funct7, rs2, rs1, funct3, rd, opcode};
+    endfunction
+
+    function automatic logic [31:0] enc_u
+        (input logic [19:0] imm20, input logic [4:0] rd, input logic [6:0] opcode);
+        enc_u = {imm20, rd, opcode};
+    endfunction
+
+    function automatic logic [31:0] i_sub  (input logic [4:0] rd, rs1, rs2);
+        i_sub  = enc_r(7'b0100000, rs2, rs1, 3'b000, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_and  (input logic [4:0] rd, rs1, rs2);
+        i_and  = enc_r(7'b0000000, rs2, rs1, 3'b111, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_or   (input logic [4:0] rd, rs1, rs2);
+        i_or   = enc_r(7'b0000000, rs2, rs1, 3'b110, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_xor  (input logic [4:0] rd, rs1, rs2);
+        i_xor  = enc_r(7'b0000000, rs2, rs1, 3'b100, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_slt  (input logic [4:0] rd, rs1, rs2);
+        i_slt  = enc_r(7'b0000000, rs2, rs1, 3'b010, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_sltu (input logic [4:0] rd, rs1, rs2);
+        i_sltu = enc_r(7'b0000000, rs2, rs1, 3'b011, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_sll  (input logic [4:0] rd, rs1, rs2);
+        i_sll  = enc_r(7'b0000000, rs2, rs1, 3'b001, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_srl  (input logic [4:0] rd, rs1, rs2);
+        i_srl  = enc_r(7'b0000000, rs2, rs1, 3'b101, rd, OPCODE_R_TYPE);
+    endfunction
+    function automatic logic [31:0] i_sra  (input logic [4:0] rd, rs1, rs2);
+        i_sra  = enc_r(7'b0100000, rs2, rs1, 3'b101, rd, OPCODE_R_TYPE);
+    endfunction
+
+    function automatic logic [31:0] i_lui   (input logic [4:0] rd, input logic [19:0] imm20);
+        i_lui   = enc_u(imm20, rd, OPCODE_LUI);
+    endfunction
+    function automatic logic [31:0] i_auipc (input logic [4:0] rd, input logic [19:0] imm20);
+        i_auipc = enc_u(imm20, rd, OPCODE_AUIPC);
+    endfunction
+
+    function automatic logic [31:0] i_sb  (input logic [4:0] rs1, rs2, input logic [11:0] imm);
+        i_sb  = {imm[11:5], rs2, rs1, 3'b000, imm[4:0], OPCODE_STORE};
+    endfunction
+    function automatic logic [31:0] i_sh  (input logic [4:0] rs1, rs2, input logic [11:0] imm);
+        i_sh  = {imm[11:5], rs2, rs1, 3'b001, imm[4:0], OPCODE_STORE};
+    endfunction
+    function automatic logic [31:0] i_lb  (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lb  = enc_i(imm, rs1, 3'b000, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lbu (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lbu = enc_i(imm, rs1, 3'b100, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lh  (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lh  = enc_i(imm, rs1, 3'b001, rd, OPCODE_LOAD);
+    endfunction
+    function automatic logic [31:0] i_lhu (input logic [4:0] rd, rs1, input logic [11:0] imm);
+        i_lhu = enc_i(imm, rs1, 3'b101, rd, OPCODE_LOAD);
+    endfunction
+
     function automatic logic [31:0] nop();
         nop = i_addi(5'd0, 5'd0, 12'd0);
     endfunction
@@ -300,6 +365,63 @@ module rv32i_pipeline_core_tb;
         check_reg(8, 32'd13, "x8 = 13 -- landed correctly after JALR");
     endtask
 
+    task automatic phase6_full_alu_coverage();
+        $display("\n--- Phase 6: Full ALU Op Coverage (vs Version 1 ground truth) ---");
+        apply_reset();
+        imem.write_word(0,  i_addi(5'd1, 5'd0, 12'd12));
+        imem.write_word(1,  i_addi(5'd2, 5'd0, 12'd5));
+        imem.write_word(2,  i_sub (5'd3, 5'd1, 5'd2));
+        imem.write_word(3,  i_and (5'd4, 5'd1, 5'd2));
+        imem.write_word(4,  i_or  (5'd5, 5'd1, 5'd2));
+        imem.write_word(5,  i_xor (5'd6, 5'd1, 5'd2));
+        imem.write_word(6,  i_slt (5'd7, 5'd2, 5'd1));
+        imem.write_word(7,  i_sltu(5'd8, 5'd2, 5'd1));
+        imem.write_word(8,  i_sll (5'd9, 5'd2, 5'd1));
+        imem.write_word(9,  i_srl (5'd10, 5'd1, 5'd2));
+        imem.write_word(10, i_sra (5'd11, 5'd1, 5'd2));
+
+        run_cycles(15);
+        check_reg(3,  32'd7,   "SUB: x3 = 12-5 = 7");
+        check_reg(4,  32'd4,   "AND: x4 = 12&5 = 4");
+        check_reg(5,  32'd13,  "OR:  x5 = 12|5 = 13");
+        check_reg(6,  32'd9,   "XOR: x6 = 12^5 = 9");
+        check_reg(7,  32'd1,   "SLT: x7 = (5<12) = 1");
+        check_reg(8,  32'd1,   "SLTU: x8 = (5<12u) = 1");
+        check_reg(9,  32'd5 << (12 & 32'h1F),  "SLL: x9 = 5<<(12&0x1F)");
+        check_reg(10, 32'd12 >> (5 & 32'h1F),  "SRL: x10 = 12>>(5&0x1F)");
+        check_reg(11, 32'd12 >>> (5 & 32'h1F), "SRA: x11 = 12>>>(5&0x1F)");
+    endtask
+
+    task automatic phase6_lui_auipc();
+        $display("\n--- Phase 6: LUI / AUIPC (vs Version 1 ground truth) ---");
+        apply_reset();
+        imem.write_word(0, i_lui  (5'd1, 20'h12345));
+        imem.write_word(1, i_auipc(5'd2, 20'h00001));
+
+        run_cycles(6);
+        check_reg(1, 32'h1234_5000, "LUI: x1 = 0x12345000");
+        check_reg(2, 32'h0000_1004, "AUIPC: x2 = pc(4) + 0x1000 = 0x1004");
+    endtask
+
+    task automatic phase6_byte_halfword_load_store();
+        $display("\n--- Phase 6: Byte/Halfword Load-Store (vs Version 1 ground truth) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd1, 5'd0, 12'd200));
+        imem.write_word(1, i_addi(5'd4, 5'd0, -12'sd1));
+        imem.write_word(2, i_sb  (5'd1, 5'd4, 12'd4));
+        imem.write_word(3, i_lb  (5'd5, 5'd1, 12'd4));
+        imem.write_word(4, i_lbu (5'd6, 5'd1, 12'd4));
+        imem.write_word(5, i_sh  (5'd1, 5'd4, 12'd8));
+        imem.write_word(6, i_lh  (5'd7, 5'd1, 12'd8));
+        imem.write_word(7, i_lhu (5'd8, 5'd1, 12'd8));
+
+        run_cycles(12);
+        check_reg(5, 32'hFFFF_FFFF, "LB sign-extends stored 0xFF -> -1");
+        check_reg(6, 32'h0000_00FF, "LBU zero-extends stored 0xFF -> 0x000000FF");
+        check_reg(7, 32'hFFFF_FFFF, "LH sign-extends stored 0xFFFF -> -1");
+        check_reg(8, 32'h0000_FFFF, "LHU zero-extends stored 0xFFFF -> 0x0000FFFF");
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
@@ -314,9 +436,12 @@ module rv32i_pipeline_core_tb;
         phase5_not_taken_branch();
         phase5_jal();
         phase5_jalr();
+        phase6_full_alu_coverage();
+        phase6_lui_auipc();
+        phase6_byte_halfword_load_store();
 
         $display("\n===================================");
-        $display("Pipeline Phase 5: %0d PASS, %0d FAIL", pass_count, fail_count);
+        $display("Pipeline Phase 6: %0d PASS, %0d FAIL", pass_count, fail_count);
         $display("Coverage: branch_taken=%0d branch_not_taken=%0d jal=%0d jalr=%0d flush_events=%0d",
                  cov_branch_taken, cov_branch_not_taken, cov_jal_seen, cov_jalr_seen, cov_flush_events);
         $display("===================================");
