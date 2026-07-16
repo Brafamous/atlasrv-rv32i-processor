@@ -22,13 +22,13 @@ module rv32i_pipeline_core (
 
     logic [XLEN-1:0] pc, pc_plus4;
     logic [XLEN-1:0] pc_next;
-    assign pc_next = pc_plus4;
+    assign pc_next = ex_branch_taken ? ex_branch_target : pc_plus4;
 
     pc_reg u_pc_reg (
         .clk      (clk),
         .rst_n    (rst_n),
         .pc_next  (pc_next),
-        .pc_en    (~hazard_stall),
+        .pc_en    (~hazard_stall | ex_branch_taken),
         .pc       (pc),
         .pc_plus4 (pc_plus4)
     );
@@ -53,7 +53,7 @@ module rv32i_pipeline_core (
         .clk           (clk),
         .rst_n         (rst_n),
         .stall         (hazard_stall),
-        .flush         (1'b0),
+        .flush         (ex_branch_taken),
         .pc_i          (if_pc),
         .pc_plus4_i    (if_pc_plus4),
         .instruction_i (if_instruction),
@@ -102,7 +102,7 @@ module rv32i_pipeline_core (
         .clk         (clk),
         .rst_n       (rst_n),
         .stall       (1'b0),
-        .flush       (hazard_stall),
+        .flush       (hazard_stall | ex_branch_taken),
         .pc_i        (id_pc),
         .pc_plus4_i  (id_pc_plus4),
         .rs1_data_i  (id_rs1_data),
