@@ -1,18 +1,6 @@
 `timescale 1ns/1ps
 `default_nettype none
 
-//==================================================================
-// rv32i_single_cycle_core_tb
-//
-// System-level bring-up: the core wired to the two independently
-// verified memory models. From here on we never drive imem/dmem
-// ports directly -- the CPU controls them. We load a program via
-// write_word() on the instruction memory instance (a testbench-only
-// task; the CPU has no write path to instruction memory), then let
-// the clock run and check architectural state: registers, PC, and
-// data memory contents.
-//==================================================================
-
 import rv32i_pkg::*;
 
 module rv32i_single_cycle_core_tb;
@@ -301,6 +289,16 @@ module rv32i_single_cycle_core_tb;
         check_reg(8, 32'd11, "x8 = 11 -- landed correctly after JALR target=24");
     endtask
 
+    task automatic phase9_self_reference_regression();
+        $display("\n--- Phase 9: Self-Reference Regression (BUG-001) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd3, 5'd0, 12'd100));
+        imem.write_word(1, i_addi(5'd3, 5'd3, -12'sd14));
+
+        run_cycles(2);
+        check_reg(3, 32'd86, "x3 = x3-14 = 86 (self-referencing addi, BUG-001 regression)");
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
@@ -312,6 +310,7 @@ module rv32i_single_cycle_core_tb;
         phase6_branch();
         phase7_jal();
         phase8_jalr();
+        phase9_self_reference_regression();
 
         $display("\n===================================");
         $display("CPU bring-up complete: %0d PASS, %0d FAIL", pass_count, fail_count);

@@ -422,6 +422,41 @@ module rv32i_pipeline_core_tb;
         check_reg(8, 32'h0000_FFFF, "LHU zero-extends stored 0xFFFF -> 0x0000FFFF");
     endtask
 
+    task automatic phase7_self_reference_regression();
+        $display("\n--- Phase 7: Self-Reference Regression (BUG-001) ---");
+        apply_reset();
+        imem.write_word(0, i_addi(5'd3, 5'd0, 12'd100));
+        imem.write_word(1, i_addi(5'd3, 5'd3, -12'sd14));
+        imem.write_word(2, i_add (5'd1, 5'd1, 5'd1));
+
+        run_cycles(7);
+        check_reg(3, 32'd86, "x3 = x3-14 = 86 (self-referencing addi, BUG-001 regression)");
+        check_reg(1, 32'd0,  "x1 = x1+x1 = 0 (rd==rs1==rs2, all three same register)");
+    endtask
+
+    task automatic phase6_alu_edge_cases();
+        $display("\n--- Phase 6: ALU Edge Cases (signed/unsigned, shift boundaries) ---");
+        apply_reset();
+        imem.write_word(0,  i_addi(5'd1, 5'd0, -12'sd1));
+        imem.write_word(1,  i_addi(5'd2, 5'd0, 12'd1));
+        imem.write_word(2,  i_slt (5'd3, 5'd1, 5'd2));
+        imem.write_word(3,  i_sltu(5'd4, 5'd1, 5'd2));
+        imem.write_word(4,  i_lui (5'd5, 20'h80000));
+        imem.write_word(5,  i_addi(5'd6, 5'd0, 12'd4));
+        imem.write_word(6,  i_sra (5'd7, 5'd5, 5'd6));
+        imem.write_word(7,  i_srl (5'd8, 5'd5, 5'd6));
+        imem.write_word(8,  i_addi(5'd9, 5'd0, 12'd31));
+        imem.write_word(9,  i_addi(5'd10, 5'd0, 12'd1));
+        imem.write_word(10, i_sll (5'd11, 5'd10, 5'd9));
+
+        run_cycles(15);
+        check_reg(3,  32'd1, "SLT (signed):  -1 < 1  = 1 (true)");
+        check_reg(4,  32'd0, "SLTU (unsigned): 0xFFFFFFFF < 1 = 0 (false)");
+        check_reg(7,  32'hF800_0000, "SRA: 0x80000000 >>> 4 = 0xF8000000 (sign-extended)");
+        check_reg(8,  32'h0800_0000, "SRL: 0x80000000 >> 4  = 0x08000000 (zero-extended)");
+        check_reg(11, 32'h8000_0000, "SLL: 1 << 31 = 0x80000000 (max shift boundary)");
+    endtask
+
     initial begin
         rst_n = 1'b0;
 
@@ -437,8 +472,10 @@ module rv32i_pipeline_core_tb;
         phase5_jal();
         phase5_jalr();
         phase6_full_alu_coverage();
+        phase6_alu_edge_cases();
         phase6_lui_auipc();
         phase6_byte_halfword_load_store();
+        phase7_self_reference_regression();
 
         $display("\n===================================");
         $display("Pipeline Phase 6: %0d PASS, %0d FAIL", pass_count, fail_count);

@@ -20,9 +20,7 @@ module hazard_detection_unit (
         end else begin
             stall_o = 1'b0;
         end
-    end
 
-    always_comb begin
         if (stall_o) begin
             assert (idex_mem_read_i)
                 else $error("Stall asserted for a non-load producer -- unnecessary stall");
